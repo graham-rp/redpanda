@@ -10,13 +10,86 @@
 package selftest
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 
 	"github.com/redpanda-data/common-go/rpadmin"
 
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPrintSelfTestStatus(t *testing.T) {
+	reports := []rpadmin.SelfTestNodeReport{
+		{
+			NodeID: 0,
+			Status: "idle",
+			Stage:  "idle",
+		},
+		{
+			NodeID: 1,
+			Status: "idle",
+			Stage:  "idle",
+			Results: []rpadmin.SelfTestNodeResult{
+				{
+					TestName: "disk-test",
+					TestType: "disk",
+					TestID:   "abc-123",
+					Timeouts: 0,
+					Duration: 1000,
+				},
+			},
+		},
+	}
+
+	t.Run("text format prints headers", func(t *testing.T) {
+		f := config.OutFormatter{Kind: "text"}
+		var buf bytes.Buffer
+		// Node 0 has no results; node 1 has an error result (avoids nil pointer on metrics).
+		errMsg := "test error"
+		reportsWithErr := []rpadmin.SelfTestNodeReport{
+			{NodeID: 0, Status: "idle", Stage: "idle"},
+			{NodeID: 1, Status: "idle", Stage: "idle", Results: []rpadmin.SelfTestNodeResult{
+				{TestName: "disk-test", TestType: "disk", TestID: "abc-123", Error: &errMsg},
+			}},
+		}
+		require.NoError(t, printSelfTestStatus(f, reportsWithErr, &buf))
+		out := buf.String()
+		require.Contains(t, out, "NODE ID: 1 | STATUS: IDLE")
+	})
+
+	t.Run("json format marshals reports", func(t *testing.T) {
+		f := config.OutFormatter{Kind: "json"}
+		var buf bytes.Buffer
+		require.NoError(t, printSelfTestStatus(f, reports, &buf))
+		got := buf.String()
+		require.Contains(t, got, `"node_id"`)
+		require.Contains(t, got, `"name"`)
+	})
+
+	t.Run("running nodes prints status message", func(t *testing.T) {
+		running := []rpadmin.SelfTestNodeReport{
+			{NodeID: 0, Status: "running", Stage: "disk"},
+		}
+		f := config.OutFormatter{Kind: "text"}
+		var buf bytes.Buffer
+		require.NoError(t, printSelfTestStatus(f, running, &buf))
+		out := buf.String()
+		require.Contains(t, out, "Node 0 is still running disk self test")
+	})
+
+	t.Run("uninitialized prints idle message", func(t *testing.T) {
+		uninit := []rpadmin.SelfTestNodeReport{
+			{NodeID: 0, Status: "idle", Stage: "idle"},
+		}
+		f := config.OutFormatter{Kind: "text"}
+		var buf bytes.Buffer
+		require.NoError(t, printSelfTestStatus(f, uninit, &buf))
+		out := buf.String()
+		require.Contains(t, out, "All nodes are idle with no cached test results")
+	})
+}
 
 func TestClusterStatus(t *testing.T) {
 	for _, test := range []struct {
