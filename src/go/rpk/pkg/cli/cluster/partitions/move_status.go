@@ -11,6 +11,7 @@ package partitions
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,20 +27,90 @@ import (
 	"github.com/twmb/types"
 )
 
+type partitionMoveStatus struct {
+	NamespaceTopic    string `json:"namespace_topic" yaml:"namespace_topic"`
+	Partition         int    `json:"partition" yaml:"partition"`
+	MovingFrom        []int  `json:"moving_from" yaml:"moving_from"`
+	MovingTo          []int  `json:"moving_to" yaml:"moving_to"`
+	CompletionPercent int    `json:"completion_percent" yaml:"completion_percent"`
+	PartitionSize     int    `json:"partition_size" yaml:"partition_size"`
+	BytesMoved        int    `json:"bytes_moved" yaml:"bytes_moved"`
+	BytesRemaining    int    `json:"bytes_remaining" yaml:"bytes_remaining"`
+}
+
+func buildMoveStatuses(reconfigs []rpadmin.ReconfigurationsResponse) []partitionMoveStatus {
+	statuses := make([]partitionMoveStatus, 0, len(reconfigs))
+	for _, r := range reconfigs {
+		var completion int
+		if r.PartitionSize > 0 {
+			completion = r.BytesMoved * 100 / r.PartitionSize
+		}
+		from := make([]int, 0, len(r.PreviousReplicas))
+		for _, replica := range r.PreviousReplicas {
+			from = append(from, replica.NodeID)
+		}
+		to := make([]int, 0, len(r.NewReplicas))
+		for _, replica := range r.NewReplicas {
+			to = append(to, replica.NodeID)
+		}
+		statuses = append(statuses, partitionMoveStatus{
+			NamespaceTopic:    r.Ns + "/" + r.Topic,
+			Partition:         r.PartitionID,
+			MovingFrom:        from,
+			MovingTo:          to,
+			CompletionPercent: completion,
+			PartitionSize:     r.PartitionSize,
+			BytesMoved:        r.BytesMoved,
+			BytesRemaining:    r.BytesLeft,
+		})
+	}
+	return statuses
+}
+
+func printMoveStatus(f config.OutFormatter, statuses []partitionMoveStatus, human bool, w io.Writer) {
+	if isText, _, t, err := f.Format(statuses); !isText {
+		out.MaybeDie(err, "unable to print in the requested format %q: %v", f.Kind, err)
+		fmt.Fprintln(w, t)
+		return
+	}
+	sizeFn := func(size int) string {
+		if human {
+			return units.HumanSize(float64(size))
+		}
+		return strconv.Itoa(size)
+	}
+	tw := out.NewTableTo(w, "NAMESPACE-TOPIC", "PARTITION", "MOVING-FROM", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE", "BYTES-MOVED", "BYTES-REMAINING")
+	defer tw.Flush()
+	for _, s := range statuses {
+		tw.Print(
+			s.NamespaceTopic,
+			s.Partition,
+			fmt.Sprint(s.MovingFrom),
+			fmt.Sprint(s.MovingTo),
+			s.CompletionPercent,
+			sizeFn(s.PartitionSize),
+			sizeFn(s.BytesMoved),
+			sizeFn(s.BytesRemaining),
+		)
+	}
+}
+
 func newPartitionMovementsStatusCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	var (
-		completion       int
-		all              bool
-		human            bool
-		partitions       []string
-		response         []rpadmin.ReconfigurationsResponse
-		filteredResponse []rpadmin.ReconfigurationsResponse
+		all        bool
+		human      bool
+		partitions []string
 	)
 	cmd := &cobra.Command{
 		Use:   "move-status",
 		Short: "Show ongoing partition movements",
 		Long:  helpListMovement,
 		Run: func(cmd *cobra.Command, topics []string) {
+			f := p.Formatter
+			if h, ok := f.Help([]partitionMoveStatus{}); ok {
+				out.Exit(h)
+			}
+
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "rpk unable to load config: %v", err)
 			config.CheckExitCloudAdmin(p)
@@ -52,13 +123,14 @@ func newPartitionMovementsStatusCommand(fs afero.Fs, p *config.Params) *cobra.Co
 			cl, err := adminapi.NewClient(cmd.Context(), fs, p)
 			out.MaybeDie(err, "unable to initialize admin client: %v", err)
 
-			response, err = cl.Reconfigurations(cmd.Context())
+			response, err := cl.Reconfigurations(cmd.Context())
 			out.MaybeDie(err, "unable to list partition movements: %v", err)
 
 			if len(response) == 0 {
 				out.Exit("There are no ongoing partition movements.")
 			}
 
+			var filteredResponse []rpadmin.ReconfigurationsResponse
 			for _, t := range topics {
 				nt := strings.Split(t, "/")
 				if len(nt) > 2 {
@@ -80,49 +152,6 @@ func newPartitionMovementsStatusCommand(fs afero.Fs, p *config.Params) *cobra.Co
 				response = filteredResponse
 			}
 
-			sizeFn := func(size int) string {
-				if human {
-					return units.HumanSize(float64(size))
-				}
-				return strconv.Itoa(size)
-			}
-
-			f := func(rr *rpadmin.ReconfigurationsResponse) any {
-				var (
-					newReplica []int
-					oldReplica []int
-				)
-				nt := rr.Ns + "/" + rr.Topic
-				if rr.PartitionSize > 0 {
-					completion = rr.BytesMoved * 100 / rr.PartitionSize
-				}
-				for _, r := range rr.NewReplicas {
-					newReplica = append(newReplica, r.NodeID)
-				}
-				for _, r := range rr.PreviousReplicas {
-					oldReplica = append(oldReplica, r.NodeID)
-				}
-				return struct {
-					NT             string
-					PartitionID    int
-					MovingFrom     []int
-					MovingTo       []int
-					Completion     int
-					PartitionSize  string
-					BytesMoved     string
-					BytesRemaining string
-				}{
-					nt,
-					rr.PartitionID,
-					oldReplica,
-					newReplica,
-					completion,
-					sizeFn(rr.PartitionSize),
-					sizeFn(rr.BytesMoved),
-					sizeFn(rr.BytesLeft),
-				}
-			}
-
 			types.Sort(response)
 
 			const (
@@ -136,12 +165,7 @@ func newPartitionMovementsStatusCommand(fs afero.Fs, p *config.Params) *cobra.Co
 				})...,
 			)
 			sections.Add(secMove, func() {
-				headers := []string{"Namespace-Topic", "Partition", "Moving-from", "Moving-to", "Completion-%", "Partition-size", "Bytes-moved", "Bytes-remaining"}
-				tw := out.NewTable(headers...)
-				defer tw.Flush()
-				for _, tps := range response {
-					tw.PrintStructFields(f(&tps))
-				}
+				printMoveStatus(f, buildMoveStatuses(response), human, cmd.OutOrStdout())
 			})
 
 			sections.Add(secReconcile, func() {
@@ -171,12 +195,12 @@ func newPartitionMovementsStatusCommand(fs afero.Fs, p *config.Params) *cobra.Co
 	cmd.Flags().BoolVarP(&all, "print-all", "a", false, "Print internal states about movements for debugging")
 	cmd.Flags().BoolVarP(&human, "human-readable", "H", false, "Print the partition size in a human-readable form")
 	cmd.Flags().StringSliceVarP(&partitions, "partition", "p", nil, "Partitions to filter ongoing movements status (repeatable)")
+	p.InstallFormatFlag(cmd)
 
 	return cmd
 }
 
-// This function returns true when a partition that movement is
-// ongoing is a requested partition by the --partition option.
+// contains returns true when the given partition is in the list of requested partitions.
 func contains(pReq []string, pRes string) bool {
 	return slices.Contains(pReq, pRes)
 }
@@ -211,4 +235,7 @@ Using -H, it prints the partition size in a human-readable format
 Using "--print-all / -a" the command additionally prints the column
 "RECONCILIATION STATUSES", which reveals the internal status of the ongoing
 reconciliations. Reported errors do not necessarily mean real problems.
+
+The --format flag controls the output format: text (default), json, yaml, or
+help (prints field descriptions).
 `
