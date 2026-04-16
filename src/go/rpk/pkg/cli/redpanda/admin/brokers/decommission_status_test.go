@@ -32,12 +32,12 @@ func TestBuildDecommissionStatus(t *testing.T) {
 		dbs := rpadmin.DecommissionStatusResponse{
 			Partitions: []rpadmin.DecommissionPartitions{
 				{
-					Ns:            "kafka",
-					Topic:         "test",
-					Partition:     0,
-					MovingTo:      rpadmin.DecommissionMovingTo{NodeID: 3},
-					PartitionSize: 1000,
-					BytesMoved:    100,
+					Ns:              "kafka",
+					Topic:           "test",
+					Partition:       0,
+					MovingTo:        rpadmin.DecommissionMovingTo{NodeID: 3},
+					PartitionSize:   1000,
+					BytesMoved:      100,
 					BytesLeftToMove: 900,
 				},
 			},
