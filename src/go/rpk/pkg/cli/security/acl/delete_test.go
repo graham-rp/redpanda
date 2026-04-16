@@ -15,86 +15,54 @@ import (
 	"testing"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPrintDeleteOutput(t *testing.T) {
+	f := config.OutFormatter{Kind: "text"}
+	row := aclWithMessage{
+		Principal:           "User:alice",
+		Host:                "*",
+		ResourceType:        "Topic",
+		ResourceName:        "foo",
+		ResourcePatternType: "Literal",
+		Operation:           "Read",
+		Permission:          "Allow",
+	}
 	output := aclDeleteOutput{
-		Filters: []aclWithMessage{
-			{
-				Principal:           "User:alice",
-				Host:                "*",
-				ResourceType:        "Topic",
-				ResourceName:        "foo",
-				ResourcePatternType: "Literal",
-				Operation:           "Read",
-				Permission:          "Allow",
-				Message:             "",
-			},
-		},
-		Deletions: []aclWithMessage{
-			{
-				Principal:           "User:alice",
-				Host:                "*",
-				ResourceType:        "Topic",
-				ResourceName:        "foo",
-				ResourcePatternType: "Literal",
-				Operation:           "Read",
-				Permission:          "Allow",
-				Message:             "",
-			},
-		},
+		Filters:   []aclWithMessage{row},
+		Deletions: []aclWithMessage{row},
 	}
 
-	t.Run("text output contains header and data", func(t *testing.T) {
+	header := []string{"PRINCIPAL", "HOST", "RESOURCE-TYPE", "RESOURCE-NAME", "RESOURCE-PATTERN-TYPE", "OPERATION", "PERMISSION", "ERROR"}
+	dataRow := []string{"User:alice", "*", "Topic", "foo", "Literal", "Read", "Allow"}
+
+	t.Run("filters and deletions sections", func(t *testing.T) {
 		var buf bytes.Buffer
-		f := config.OutFormatter{Kind: "text"}
 		printDeleteOutput(f, output, true, &buf)
-		got := buf.String()
-		require.Contains(t, got, "PRINCIPAL")
-		require.Contains(t, got, "User:alice")
+		require.Equal(t, [][]string{
+			{"FILTERS"},
+			header,
+			dataRow,
+			{},
+			{"DELETIONS"},
+			header,
+			dataRow,
+		}, out.TableRows(buf.String()))
 	})
 
-	t.Run("text output writes filters and deletions tables to writer", func(t *testing.T) {
+	t.Run("no header when deletions-only and flag false", func(t *testing.T) {
 		var buf bytes.Buffer
-		f := config.OutFormatter{Kind: "text"}
-		printDeleteOutput(f, output, true, &buf)
-		got := buf.String()
-		// Filters table and deletions table both appear in the writer output.
-		// Section headers go to stdout (out.Section), so we just check for table rows.
-		require.Equal(t, 2, strings.Count(got, "User:alice"), "expected data in both filters and deletions tables")
+		printDeleteOutput(f, aclDeleteOutput{Deletions: output.Deletions}, false, &buf)
+		require.Equal(t, [][]string{header, dataRow}, out.TableRows(buf.String()))
 	})
 
-	t.Run("text output no deletions header when false and no filters", func(t *testing.T) {
-		noFilters := aclDeleteOutput{
-			Deletions: output.Deletions,
-		}
+	// Round-trip verifies structured output preserves field names and values.
+	// The empty-filters case also covers the omitempty tag.
+	t.Run("json omitempty on filters", func(t *testing.T) {
 		var buf bytes.Buffer
-		f := config.OutFormatter{Kind: "text"}
-		printDeleteOutput(f, noFilters, false, &buf)
-		got := buf.String()
-		require.NotContains(t, got, "DELETIONS")
-		require.Contains(t, got, "User:alice")
-	})
-
-	t.Run("json output contains filters and deletions keys", func(t *testing.T) {
-		var buf bytes.Buffer
-		f := config.OutFormatter{Kind: "json"}
-		printDeleteOutput(f, output, false, &buf)
-		got := buf.String()
-		require.Contains(t, got, `"filters"`)
-		require.Contains(t, got, `"deletions"`)
-		require.Contains(t, got, "User:alice")
-	})
-
-	t.Run("filters omitted from json when empty", func(t *testing.T) {
-		noFilters := aclDeleteOutput{
-			Deletions: output.Deletions,
-		}
-		var buf bytes.Buffer
-		f := config.OutFormatter{Kind: "json"}
-		printDeleteOutput(f, noFilters, false, &buf)
-		got := buf.String()
-		require.False(t, strings.Contains(got, `"filters"`), "filters should be omitted when nil/empty")
+		printDeleteOutput(config.OutFormatter{Kind: "json"}, aclDeleteOutput{Deletions: output.Deletions}, false, &buf)
+		require.False(t, strings.Contains(buf.String(), `"filters"`))
 	})
 }

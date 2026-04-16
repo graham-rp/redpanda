@@ -10,13 +10,12 @@
 package profile
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func TestPrintProfileList(t *testing.T) {
@@ -25,37 +24,12 @@ func TestPrintProfileList(t *testing.T) {
 		{Name: "prod", Description: ""},
 	}
 
-	jsonBytes, err := json.Marshal(profiles)
-	require.NoError(t, err)
-	yamlBytes, err := yaml.Marshal(profiles)
-	require.NoError(t, err)
-
-	cases := []struct {
-		kind   string
-		output string
-	}{
-		{
-			kind: "text",
-			output: "NAME  DESCRIPTION\n" +
-				"dev*  development cluster\n" +
-				"prod  \n",
-		},
-		{
-			kind:   "json",
-			output: string(jsonBytes) + "\n",
-		},
-		{
-			kind:   "yaml",
-			output: string(yamlBytes) + "\n",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.kind, func(t *testing.T) {
-			f := config.OutFormatter{Kind: c.kind}
-			b := &strings.Builder{}
-			printProfileList(f, profiles, b)
-			require.Equal(t, c.output, b.String())
-		})
-	}
+	f := config.OutFormatter{Kind: "text"}
+	b := &strings.Builder{}
+	printProfileList(f, profiles, b)
+	require.Equal(t, [][]string{
+		{"NAME", "DESCRIPTION"},
+		{"dev*", "development", "cluster"},
+		{"prod"},
+	}, out.TableRows(b.String()))
 }

@@ -22,8 +22,8 @@ import (
 
 type profileListItem struct {
 	Name        string `json:"name" yaml:"name"`
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-	Current     bool   `json:"current,omitempty" yaml:"current,omitempty"`
+	Description string `json:"description" yaml:"description"`
+	Current     bool   `json:"current" yaml:"current"`
 }
 
 func buildProfileList(y *config.RpkYaml) []profileListItem {

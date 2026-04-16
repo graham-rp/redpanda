@@ -11,21 +11,13 @@ package brokers
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/redpanda-data/common-go/rpadmin"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
 )
-
-func textFormatter() config.OutFormatter {
-	return config.OutFormatter{Kind: "text"}
-}
-
-func jsonFormatter() config.OutFormatter {
-	return config.OutFormatter{Kind: "json"}
-}
 
 func TestBuildDecommissionStatus(t *testing.T) {
 	t.Run("basic partitions", func(t *testing.T) {
@@ -122,6 +114,7 @@ func TestBuildDecommissionStatus(t *testing.T) {
 }
 
 func TestPrintDecommissionStatus(t *testing.T) {
+	f := config.OutFormatter{Kind: "text"}
 	resp := decommissionStatusResponse{
 		Partitions: []decommissionPartition{
 			{Partition: "kafka/test/0", MovingTo: 3, CompletionPercent: 10, PartitionSize: 1000},
@@ -129,106 +122,80 @@ func TestPrintDecommissionStatus(t *testing.T) {
 		},
 	}
 
-	t.Run("text output has headers and rows", func(t *testing.T) {
+	t.Run("basic", func(t *testing.T) {
 		var buf bytes.Buffer
-		printDecommissionStatus(textFormatter(), resp, false, false, &buf)
-		output := buf.String()
-
-		// Output starts with a section header (2 lines: title + underline)
-		// followed by the table (header row + data rows).
-		lines := strings.Split(strings.TrimSpace(output), "\n")
-		require.GreaterOrEqual(t, len(lines), 5, "expected section header, underline, table header, separator, and data rows")
-		headers := strings.Fields(lines[2])
-		require.Equal(t, []string{"PARTITION", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE"}, headers)
-		require.Contains(t, output, "kafka/test/0")
-		require.Contains(t, output, "kafka/test/1")
+		printDecommissionStatus(f, resp, false, false, &buf)
+		require.Equal(t, [][]string{
+			{"DECOMMISSION", "PROGRESS"},
+			{"PARTITION", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE"},
+			{"kafka/test/0", "3", "10", "1000"},
+			{"kafka/test/1", "3", "50", "2000"},
+		}, out.TableRows(buf.String()))
 	})
 
-	t.Run("text output detailed has extra columns", func(t *testing.T) {
-		moved := 100
-		remaining := 900
+	t.Run("detailed adds bytes columns", func(t *testing.T) {
+		moved, remaining := 100, 900
 		respDetailed := decommissionStatusResponse{
 			Partitions: []decommissionPartition{
-				{
-					Partition:         "kafka/test/0",
-					MovingTo:          3,
-					CompletionPercent: 10,
-					PartitionSize:     1000,
-					BytesMoved:        &moved,
-					BytesRemaining:    &remaining,
-				},
+				{Partition: "kafka/test/0", MovingTo: 3, CompletionPercent: 10, PartitionSize: 1000, BytesMoved: &moved, BytesRemaining: &remaining},
 			},
 		}
 		var buf bytes.Buffer
-		printDecommissionStatus(textFormatter(), respDetailed, true, false, &buf)
-		output := buf.String()
-
-		// lines[0]=section title, lines[1]=underline, lines[2]=table headers
-		lines := strings.Split(strings.TrimSpace(output), "\n")
-		headers := strings.Fields(lines[2])
-		require.Equal(t, []string{"PARTITION", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE", "BYTES-MOVED", "BYTES-REMAINING"}, headers)
+		printDecommissionStatus(f, respDetailed, true, false, &buf)
+		require.Equal(t, [][]string{
+			{"DECOMMISSION", "PROGRESS"},
+			{"PARTITION", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE", "BYTES-MOVED", "BYTES-REMAINING"},
+			{"kafka/test/0", "3", "10", "1000", "100", "900"},
+		}, out.TableRows(buf.String()))
 	})
 
-	t.Run("json output", func(t *testing.T) {
-		var buf bytes.Buffer
-		printDecommissionStatus(jsonFormatter(), resp, false, false, &buf)
-		output := buf.String()
-
-		require.Contains(t, output, `"partition"`)
-		require.Contains(t, output, `"moving_to"`)
-		require.Contains(t, output, `"completion_percent"`)
-		require.Contains(t, output, `"partition_size"`)
-		require.Contains(t, output, `"kafka/test/0"`)
-	})
-
-	t.Run("text output with reallocation failures", func(t *testing.T) {
+	t.Run("reallocation failures section precedes progress", func(t *testing.T) {
 		respFail := decommissionStatusResponse{
-			ReallocationFailures: []reallocationFailure{
-				{Partition: "kafka/foo/1", Reason: "no space"},
-			},
-			Partitions: []decommissionPartition{
-				{Partition: "kafka/test/0", MovingTo: 3, CompletionPercent: 5, PartitionSize: 100},
-			},
+			ReallocationFailures: []reallocationFailure{{Partition: "kafka/foo/1", Reason: "no space"}},
+			Partitions:           []decommissionPartition{{Partition: "kafka/test/0", MovingTo: 3, CompletionPercent: 5, PartitionSize: 100}},
 		}
 		var buf bytes.Buffer
-		printDecommissionStatus(textFormatter(), respFail, false, false, &buf)
-		output := buf.String()
-
-		require.Contains(t, output, "REALLOCATION FAILURE DETAILS")
-		require.Contains(t, output, "kafka/foo/1")
-		require.Contains(t, output, "no space")
-		require.Contains(t, output, "DECOMMISSION PROGRESS")
+		printDecommissionStatus(f, respFail, false, false, &buf)
+		require.Equal(t, [][]string{
+			{"REALLOCATION", "FAILURE", "DETAILS"},
+			{"PARTITION", "REASON"},
+			{"kafka/foo/1", "no", "space"},
+			{},
+			{"DECOMMISSION", "PROGRESS"},
+			{"PARTITION", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE"},
+			{"kafka/test/0", "3", "5", "100"},
+		}, out.TableRows(buf.String()))
 	})
 
-	t.Run("text output with allocation failures", func(t *testing.T) {
+	t.Run("allocation failures section precedes progress", func(t *testing.T) {
 		respFail := decommissionStatusResponse{
 			AllocationFailures: []string{"kafka/bar/0"},
-			Partitions: []decommissionPartition{
-				{Partition: "kafka/test/0", MovingTo: 3, CompletionPercent: 5, PartitionSize: 100},
-			},
+			Partitions:         []decommissionPartition{{Partition: "kafka/test/0", MovingTo: 3, CompletionPercent: 5, PartitionSize: 100}},
 		}
 		var buf bytes.Buffer
-		printDecommissionStatus(textFormatter(), respFail, false, false, &buf)
-		output := buf.String()
-
-		require.Contains(t, output, "ALLOCATION FAILURES")
-		require.Contains(t, output, "kafka/bar/0")
+		printDecommissionStatus(f, respFail, false, false, &buf)
+		require.Equal(t, [][]string{
+			{"ALLOCATION", "FAILURES"},
+			{"kafka/bar/0"},
+			{},
+			{"DECOMMISSION", "PROGRESS"},
+			{"PARTITION", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE"},
+			{"kafka/test/0", "3", "5", "100"},
+		}, out.TableRows(buf.String()))
 	})
 
-	t.Run("human readable text output", func(t *testing.T) {
+	t.Run("human readable sizes", func(t *testing.T) {
 		var buf bytes.Buffer
-		printDecommissionStatus(textFormatter(), resp, false, true, &buf)
-		output := buf.String()
-
-		// With human-readable, sizes should not be raw integers for large values.
-		// For small values like 1000 bytes, it renders as "1.0 kB".
-		require.NotContains(t, output, " 1000 ")
+		printDecommissionStatus(f, resp, false, true, &buf)
+		rows := out.TableRows(buf.String())
+		// Data row's PARTITION-SIZE column should no longer be raw integer.
+		require.NotEqual(t, "1000", rows[2][3])
+		require.NotEqual(t, "2000", rows[3][3])
 	})
 
 	t.Run("json empty partitions", func(t *testing.T) {
-		empty := decommissionStatusResponse{Partitions: []decommissionPartition{}}
 		var buf bytes.Buffer
-		printDecommissionStatus(jsonFormatter(), empty, false, false, &buf)
+		printDecommissionStatus(config.OutFormatter{Kind: "json"}, decommissionStatusResponse{Partitions: []decommissionPartition{}}, false, false, &buf)
 		require.Equal(t, `{"partitions":[]}`+"\n", buf.String())
 	})
 }

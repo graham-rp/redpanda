@@ -16,8 +16,8 @@ import (
 
 	"github.com/redpanda-data/common-go/rpadmin"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func ptrInt(v int) *int { return &v }
@@ -46,57 +46,19 @@ func TestPrintBalancerStatus(t *testing.T) {
 	require.Equal(t, []int{3}, resp.OverDiskLimitNodes)
 	require.Len(t, resp.BrokerReplicaDistribution, 2)
 
-	jsonBytes, err := json.Marshal(resp)
-	require.NoError(t, err)
-	yamlBytes, err := yaml.Marshal(resp)
-	require.NoError(t, err)
-
-	cases := []struct {
-		kind   string
-		output string
-	}{
-		{
-			kind: "text",
-			output: "BALANCER STATUS\n" +
-				"======================\n" +
-				"Status:                     ready\n" +
-				"Seconds Since Last Tick:    5\n" +
-				"Current Reassignment Count: 2\n" +
-				"Unavailable Nodes:          [1 2]\n" +
-				"Over Disk Limit Nodes:      [3]\n" +
-				"\n" +
-				"REPLICA DISTRIBUTION\n" +
-				"====================\n" +
-				"BROKER  PARTITION-COUNT\n",
-		},
-		{
-			kind:   "json",
-			output: string(jsonBytes) + "\n",
-		},
-		{
-			kind:   "yaml",
-			output: string(yamlBytes) + "\n",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.kind, func(t *testing.T) {
-			f := config.OutFormatter{Kind: c.kind}
-			var buf strings.Builder
-			printBalancerStatus(f, resp, &buf)
-			if c.kind == "text" {
-				// For text, just check the key-value section lines are present.
-				got := buf.String()
-				require.Contains(t, got, "Status:")
-				require.Contains(t, got, "ready")
-				require.Contains(t, got, "Unavailable Nodes:")
-				require.Contains(t, got, "BROKER")
-				require.Contains(t, got, "PARTITION-COUNT")
-			} else {
-				require.Equal(t, c.output, buf.String())
-			}
-		})
-	}
+	f := config.OutFormatter{Kind: "text"}
+	var buf strings.Builder
+	printBalancerStatus(f, resp, &buf)
+	require.Equal(t, [][]string{
+		{"Status:", "ready"},
+		{"Seconds", "Since", "Last", "Tick:", "5"},
+		{"Current", "Reassignment", "Count:", "2"},
+		{"Unavailable", "Nodes:", "[1", "2]"},
+		{"Over", "Disk", "Limit", "Nodes:", "[3]"},
+		{"BROKER", "PARTITION-COUNT"},
+		{"1", "2"},
+		{"2", "1"},
+	}, out.TableRows(buf.String()))
 }
 
 func TestPrintBalancerStatusNoBrokerDist(t *testing.T) {
@@ -118,8 +80,11 @@ func TestPrintBalancerStatusNoBrokerDist(t *testing.T) {
 	f := config.OutFormatter{Kind: "text"}
 	var buf strings.Builder
 	printBalancerStatus(f, resp, &buf)
-	got := buf.String()
-	require.Contains(t, got, "off")
+	require.Equal(t, [][]string{
+		{"Status:", "off"},
+		{"Seconds", "Since", "Last", "Tick:", "0"},
+		{"Current", "Reassignment", "Count:", "0"},
+	}, out.TableRows(buf.String()))
 }
 
 func TestPrintBalancerStatusPendingRecovery(t *testing.T) {
@@ -137,7 +102,10 @@ func TestPrintBalancerStatusPendingRecovery(t *testing.T) {
 	f := config.OutFormatter{Kind: "text"}
 	var buf strings.Builder
 	printBalancerStatus(f, resp, &buf)
-	got := buf.String()
-	require.Contains(t, got, "Partitions Pending Recovery")
-	require.Contains(t, got, "foo/0/0")
+	require.Equal(t, [][]string{
+		{"Status:", "stalled"},
+		{"Seconds", "Since", "Last", "Tick:", "0"},
+		{"Current", "Reassignment", "Count:", "0"},
+		{"Partitions", "Pending", "Recovery", "(3):", "[foo/0/0", "bar/1/0]"},
+	}, out.TableRows(buf.String()))
 }

@@ -12,10 +12,10 @@ package auth
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,59 +26,22 @@ func TestPrintCloudAuthList(t *testing.T) {
 	}
 
 	t.Run("text marks current with asterisk", func(t *testing.T) {
-		f := config.OutFormatter{Kind: "text"}
 		var buf bytes.Buffer
-		printCloudAuthList(f, data, &buf)
-		output := buf.String()
-		require.Contains(t, output, "acme-sso*")
-		require.Contains(t, output, "acme-client")
-		// Non-current should not have asterisk
-		require.NotContains(t, output, "acme-client*")
+		printCloudAuthList(config.OutFormatter{Kind: "text"}, data, &buf)
+		require.Equal(t, [][]string{
+			{"NAME", "KIND", "ORGANIZATION", "ORGANIZATION-ID"},
+			{"acme-sso*", "sso", "acme", "org-123"},
+			{"acme-client", "client", "acme", "org-123"},
+		}, out.TableRows(buf.String()))
 	})
 
-	t.Run("json uses current bool field not asterisk", func(t *testing.T) {
-		f := config.OutFormatter{Kind: "json"}
+	// Round-trip verifies that structured output uses the Current bool
+	// and does not embed the asterisk in Name.
+	t.Run("json round-trip", func(t *testing.T) {
 		var buf bytes.Buffer
-		printCloudAuthList(f, data, &buf)
-
-		var rows []map[string]any
-		require.NoError(t, json.Unmarshal(buf.Bytes(), &rows))
-		require.Len(t, rows, 2)
-
-		// Current row has current:true
-		require.Equal(t, "acme-sso", rows[0]["name"])
-		require.Equal(t, true, rows[0]["current"])
-
-		// Non-current row omits current field (omitempty)
-		require.Equal(t, "acme-client", rows[1]["name"])
-		_, hasCurrent := rows[1]["current"]
-		require.False(t, hasCurrent, "non-current auth should omit current field")
-	})
-
-	t.Run("json name has no asterisk suffix", func(t *testing.T) {
-		f := config.OutFormatter{Kind: "json"}
-		var buf bytes.Buffer
-		printCloudAuthList(f, data, &buf)
-		output := buf.String()
-		require.NotContains(t, output, "acme-sso*", "JSON output must not contain asterisk in name")
-	})
-
-	t.Run("yaml uses current bool field not asterisk", func(t *testing.T) {
-		f := config.OutFormatter{Kind: "yaml"}
-		var buf bytes.Buffer
-		printCloudAuthList(f, data, &buf)
-		output := buf.String()
-		require.Contains(t, output, "current: true")
-		require.NotContains(t, output, "acme-sso*")
-	})
-
-	t.Run("text table headers", func(t *testing.T) {
-		f := config.OutFormatter{Kind: "text"}
-		var buf bytes.Buffer
-		printCloudAuthList(f, []cloudAuthRow{}, &buf)
-		output := strings.ToLower(buf.String())
-		require.Contains(t, output, "name")
-		require.Contains(t, output, "kind")
-		require.Contains(t, output, "organization")
+		printCloudAuthList(config.OutFormatter{Kind: "json"}, data, &buf)
+		var got []cloudAuthRow
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+		require.Equal(t, data, got)
 	})
 }

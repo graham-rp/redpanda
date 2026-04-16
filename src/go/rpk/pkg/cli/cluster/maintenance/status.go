@@ -57,7 +57,7 @@ func printMaintenanceStatus(f config.OutFormatter, statuses []brokerMaintenanceS
 		fmt.Fprintln(w, t)
 		return
 	}
-	tw := out.NewTableTo(w, "NODE-ID", "ENABLED", "FINISHED", "ERRORS", "PARTITIONS", "ELIGIBLE", "TRANSFERRING", "FAILED")
+	tw := newMaintenanceReportTable(w)
 	defer tw.Flush()
 	for _, s := range statuses {
 		tw.Print(
@@ -80,12 +80,8 @@ func nullableToStr[V any](v *V) string {
 	return fmt.Sprint(*v)
 }
 
-func newMaintenanceReportTable() *out.TabWriter {
-	headers := []string{
-		"Node-ID", "Enabled", "Finished", "Errors",
-		"Partitions", "Eligible", "Transferring", "Failed",
-	}
-	return out.NewTable(headers...)
+func newMaintenanceReportTable(w io.Writer) *out.TabWriter {
+	return out.NewTableTo(w, "Node-ID", "Enabled", "Finished", "Errors", "Partitions", "Eligible", "Transferring", "Failed")
 }
 
 func addBrokerMaintenanceReport(table *out.TabWriter, b rpadmin.Broker) {

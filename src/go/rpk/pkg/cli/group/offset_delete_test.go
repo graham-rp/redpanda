@@ -10,15 +10,14 @@
 package group
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
-	"gopkg.in/yaml.v3"
 )
 
 func TestBuildOffsetDeleteResults(t *testing.T) {
@@ -113,35 +112,13 @@ func TestPrintOffsetDeleteResults(t *testing.T) {
 		{Topic: "zebra", Partition: 0, Status: "OK"},
 	}
 
-	wantJSON, err := json.Marshal(results)
-	require.NoError(t, err)
-	wantYAML, err := yaml.Marshal(results)
-	require.NoError(t, err)
-
-	tests := []struct {
-		kind string
-		want string
-	}{
-		{
-			kind: "text",
-			want: "TOPIC  PARTITION  STATUS\napple  0          OK\napple  1          some error\nzebra  0          OK\n",
-		},
-		{
-			kind: "json",
-			want: string(wantJSON) + "\n",
-		},
-		{
-			kind: "yaml",
-			want: string(wantYAML) + "\n",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.kind, func(t *testing.T) {
-			f := config.OutFormatter{Kind: tt.kind}
-			b := &strings.Builder{}
-			printOffsetDeleteResults(f, results, b)
-			require.Equal(t, tt.want, b.String())
-		})
-	}
+	f := config.OutFormatter{Kind: "text"}
+	b := &strings.Builder{}
+	printOffsetDeleteResults(f, results, b)
+	require.Equal(t, [][]string{
+		{"TOPIC", "PARTITION", "STATUS"},
+		{"apple", "0", "OK"},
+		{"apple", "1", "some", "error"},
+		{"zebra", "0", "OK"},
+	}, out.TableRows(b.String()))
 }

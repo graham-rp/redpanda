@@ -12,7 +12,6 @@ package partitions
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/redpanda-data/common-go/rpadmin"
 
@@ -71,7 +70,7 @@ occurring in the specified node:
 
 func (m *movementCancelHandler) runMovementCancel(cmd *cobra.Command, _ []string) {
 	f := m.p.Formatter
-	if h, ok := f.Help(movementCancelResult{}); ok {
+	if h, ok := f.Help([]movementCancelResult{}); ok {
 		out.Exit(h)
 	}
 
@@ -105,7 +104,7 @@ func (m *movementCancelHandler) runMovementCancel(cmd *cobra.Command, _ []string
 		out.MaybeDie(err, "unable to cancel partition movements: %v", err)
 	}
 
-	err = printMovementsResult(f, buildMovementCancelResult(movements), os.Stdout)
+	err = printMovementsResult(f, buildMovementCancelResult(movements), cmd.OutOrStdout())
 	out.MaybeDieErr(err)
 }
 

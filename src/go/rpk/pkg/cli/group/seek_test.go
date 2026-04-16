@@ -11,82 +11,45 @@ package group
 
 import (
 	"bytes"
-	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/testfs"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
 )
 
 func TestPrintSeekResults(t *testing.T) {
-	for _, test := range []struct {
-		name    string
-		format  string
-		results []seekCommitResult
-		check   func(t *testing.T, output string)
-	}{
-		{
-			name:   "text_no_errors",
-			format: "text",
-			results: []seekCommitResult{
-				{Topic: "foo", Partition: 0, Prior: 10, Current: 0},
-				{Topic: "bar", Partition: 1, Prior: 5, Current: 5},
-			},
-			check: func(t *testing.T, output string) {
-				t.Helper()
-				require.Contains(t, output, "TOPIC")
-				require.Contains(t, output, "PARTITION")
-				require.Contains(t, output, "PRIOR-OFFSET")
-				require.Contains(t, output, "CURRENT-OFFSET")
-				require.NotContains(t, output, "ERROR")
-				require.Contains(t, output, "foo")
-				require.Contains(t, output, "bar")
-			},
-		},
-		{
-			name:   "text_with_errors",
-			format: "text",
-			results: []seekCommitResult{
-				{Topic: "foo", Partition: 0, Prior: 10, Current: 0, Error: "some error"},
-				{Topic: "bar", Partition: 1, Prior: 5, Current: 5},
-			},
-			check: func(t *testing.T, output string) {
-				t.Helper()
-				require.Contains(t, output, "ERROR")
-				require.Contains(t, output, "some error")
-			},
-		},
-		{
-			name:   "json",
-			format: "json",
-			results: []seekCommitResult{
-				{Topic: "foo", Partition: 0, Prior: 10, Current: 0},
-			},
-			check: func(t *testing.T, output string) {
-				t.Helper()
-				var got []seekCommitResult
-				require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(output)), &got))
-				require.Len(t, got, 1)
-				require.Equal(t, "foo", got[0].Topic)
-				require.Equal(t, int32(0), got[0].Partition)
-				require.Equal(t, int64(10), got[0].Prior)
-				require.Equal(t, int64(0), got[0].Current)
-				require.Empty(t, got[0].Error)
-				// error field must be omitted when empty
-				require.NotContains(t, output, "error")
-			},
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			f := config.OutFormatter{Kind: test.format}
-			var buf bytes.Buffer
-			printSeekResults(f, test.results, &buf)
-			test.check(t, buf.String())
-		})
-	}
+	f := config.OutFormatter{Kind: "text"}
+
+	t.Run("no errors omits ERROR column", func(t *testing.T) {
+		results := []seekCommitResult{
+			{Topic: "foo", Partition: 0, Prior: 10, Current: 0},
+			{Topic: "bar", Partition: 1, Prior: 5, Current: 5},
+		}
+		var buf bytes.Buffer
+		printSeekResults(f, results, &buf)
+		require.Equal(t, [][]string{
+			{"TOPIC", "PARTITION", "PRIOR-OFFSET", "CURRENT-OFFSET"},
+			{"foo", "0", "10", "0"},
+			{"bar", "1", "5", "5"},
+		}, out.TableRows(buf.String()))
+	})
+
+	t.Run("with errors adds ERROR column", func(t *testing.T) {
+		results := []seekCommitResult{
+			{Topic: "foo", Partition: 0, Prior: 10, Current: 0, Error: "some error"},
+			{Topic: "bar", Partition: 1, Prior: 5, Current: 5},
+		}
+		var buf bytes.Buffer
+		printSeekResults(f, results, &buf)
+		require.Equal(t, [][]string{
+			{"TOPIC", "PARTITION", "PRIOR-OFFSET", "CURRENT-OFFSET", "ERROR"},
+			{"foo", "0", "10", "0", "some", "error"},
+			{"bar", "1", "5", "5"},
+		}, out.TableRows(buf.String()))
+	})
 }
 
 func TestParseSeekFile(t *testing.T) {

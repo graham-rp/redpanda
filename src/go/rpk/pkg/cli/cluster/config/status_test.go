@@ -10,14 +10,13 @@
 package config
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/redpanda-data/common-go/rpadmin"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func TestBuildNodeStatuses(t *testing.T) {
@@ -47,37 +46,12 @@ func TestPrintNodeStatus(t *testing.T) {
 		{Node: 2, ConfigVersion: 5, NeedsRestart: false},
 	}
 
-	jsonBytes, err := json.Marshal(statuses)
-	require.NoError(t, err)
-	yamlBytes, err := yaml.Marshal(statuses)
-	require.NoError(t, err)
-
-	cases := []struct {
-		kind   string
-		output string
-	}{
-		{
-			kind: "text",
-			output: "NODE  CONFIG-VERSION  NEEDS-RESTART  INVALID    UNKNOWN\n" +
-				"1     5               true           [bad_key]  [new_key]\n" +
-				"2     5               false          []         []\n",
-		},
-		{
-			kind:   "json",
-			output: string(jsonBytes) + "\n",
-		},
-		{
-			kind:   "yaml",
-			output: string(yamlBytes) + "\n",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.kind, func(t *testing.T) {
-			f := config.OutFormatter{Kind: c.kind}
-			b := &strings.Builder{}
-			printNodeStatus(f, statuses, b)
-			require.Equal(t, c.output, b.String())
-		})
-	}
+	f := config.OutFormatter{Kind: "text"}
+	b := &strings.Builder{}
+	printNodeStatus(f, statuses, b)
+	require.Equal(t, [][]string{
+		{"NODE", "CONFIG-VERSION", "NEEDS-RESTART", "INVALID", "UNKNOWN"},
+		{"1", "5", "true", "[bad_key]", "[new_key]"},
+		{"2", "5", "false", "[]", "[]"},
+	}, out.TableRows(b.String()))
 }

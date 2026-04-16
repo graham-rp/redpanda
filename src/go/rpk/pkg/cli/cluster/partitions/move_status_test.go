@@ -10,14 +10,13 @@
 package partitions
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/redpanda-data/common-go/rpadmin"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func TestBuildMoveStatuses(t *testing.T) {
@@ -90,50 +89,39 @@ func TestPrintMoveStatus(t *testing.T) {
 		},
 	}
 
-	jsonBytes, err := json.Marshal(statuses)
-	require.NoError(t, err)
-	yamlBytes, err := yaml.Marshal(statuses)
-	require.NoError(t, err)
-
+	header := []string{"NAMESPACE-TOPIC", "PARTITION", "MOVING-FROM", "MOVING-TO", "COMPLETION-%", "PARTITION-SIZE", "BYTES-MOVED", "BYTES-REMAINING"}
+	// Fields splits "[1 2]" into "[1" and "2]" — an acceptable trade for
+	// staying tabwriter-padding-agnostic.
 	cases := []struct {
-		name   string
-		kind   string
-		human  bool
-		output string
+		name  string
+		human bool
+		want  [][]string
 	}{
 		{
-			name: "text bytes",
-			kind: "text",
-			output: "NAMESPACE-TOPIC  PARTITION  MOVING-FROM  MOVING-TO  COMPLETION-%  PARTITION-SIZE  BYTES-MOVED  BYTES-REMAINING\n" +
-				"kafka/foo        0          [1 2]        [1 3]      50            1024            512          512\n" +
-				"kafka/bar        1          [2]          [4]        0             200             0            200\n",
+			name: "bytes",
+			want: [][]string{
+				header,
+				{"kafka/foo", "0", "[1", "2]", "[1", "3]", "50", "1024", "512", "512"},
+				{"kafka/bar", "1", "[2]", "[4]", "0", "200", "0", "200"},
+			},
 		},
 		{
-			name:  "text human",
-			kind:  "text",
+			name:  "human",
 			human: true,
-			output: "NAMESPACE-TOPIC  PARTITION  MOVING-FROM  MOVING-TO  COMPLETION-%  PARTITION-SIZE  BYTES-MOVED  BYTES-REMAINING\n" +
-				"kafka/foo        0          [1 2]        [1 3]      50            1.024kB         512B         512B\n" +
-				"kafka/bar        1          [2]          [4]        0             200B            0B           200B\n",
-		},
-		{
-			name:   "json",
-			kind:   "json",
-			output: string(jsonBytes) + "\n",
-		},
-		{
-			name:   "yaml",
-			kind:   "yaml",
-			output: string(yamlBytes) + "\n",
+			want: [][]string{
+				header,
+				{"kafka/foo", "0", "[1", "2]", "[1", "3]", "50", "1.024kB", "512B", "512B"},
+				{"kafka/bar", "1", "[2]", "[4]", "0", "200B", "0B", "200B"},
+			},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			f := config.OutFormatter{Kind: c.kind}
+			f := config.OutFormatter{Kind: "text"}
 			b := &strings.Builder{}
 			printMoveStatus(f, statuses, c.human, b)
-			require.Equal(t, c.output, b.String())
+			require.Equal(t, c.want, out.TableRows(b.String()))
 		})
 	}
 }

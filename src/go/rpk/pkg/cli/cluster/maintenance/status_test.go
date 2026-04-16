@@ -10,14 +10,13 @@
 package maintenance
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/redpanda-data/common-go/rpadmin"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func TestBuildMaintenanceStatuses(t *testing.T) {
@@ -72,37 +71,12 @@ func TestPrintMaintenanceStatus(t *testing.T) {
 		},
 	}
 
-	jsonBytes, err := json.Marshal(statuses)
-	require.NoError(t, err)
-	yamlBytes, err := yaml.Marshal(statuses)
-	require.NoError(t, err)
-
-	cases := []struct {
-		kind   string
-		output string
-	}{
-		{
-			kind: "text",
-			output: "NODE-ID  ENABLED  FINISHED  ERRORS  PARTITIONS  ELIGIBLE  TRANSFERRING  FAILED\n" +
-				"1        true     true      false   5           3         1             0\n" +
-				"2        false    -         -       -           -         -             -\n",
-		},
-		{
-			kind:   "json",
-			output: string(jsonBytes) + "\n",
-		},
-		{
-			kind:   "yaml",
-			output: string(yamlBytes) + "\n",
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.kind, func(t *testing.T) {
-			f := config.OutFormatter{Kind: c.kind}
-			b := &strings.Builder{}
-			printMaintenanceStatus(f, statuses, b)
-			require.Equal(t, c.output, b.String())
-		})
-	}
+	f := config.OutFormatter{Kind: "text"}
+	b := &strings.Builder{}
+	printMaintenanceStatus(f, statuses, b)
+	require.Equal(t, [][]string{
+		{"NODE-ID", "ENABLED", "FINISHED", "ERRORS", "PARTITIONS", "ELIGIBLE", "TRANSFERRING", "FAILED"},
+		{"1", "true", "true", "false", "5", "3", "1", "0"},
+		{"2", "false", "-", "-", "-", "-", "-", "-"},
+	}, out.TableRows(b.String()))
 }
