@@ -12,7 +12,6 @@ package plugin
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
@@ -53,7 +52,7 @@ whether you have "shadowed" plugins (the same plugin specified multiple times).
 `,
 
 		Args: cobra.ExactArgs(0),
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			f := p.Formatter
 			if local {
 				if h, ok := f.Help([]localPluginRow{}); ok {
@@ -70,7 +69,7 @@ whether you have "shadowed" plugins (the same plugin specified multiple times).
 			if local {
 				installed.Sort()
 				rows := buildLocalPluginList(installed)
-				printLocalPluginList(f, rows, os.Stdout)
+				printLocalPluginList(f, rows, cmd.OutOrStdout())
 				return
 			}
 
@@ -78,7 +77,7 @@ whether you have "shadowed" plugins (the same plugin specified multiple times).
 			out.MaybeDieErr(err)
 
 			rows := buildPluginList(fs, installed, m.Plugins)
-			printPluginList(f, rows, os.Stdout)
+			printPluginList(f, rows, cmd.OutOrStdout())
 		},
 	}
 

@@ -21,7 +21,7 @@ import (
 
 func TestPrintProfileList(t *testing.T) {
 	profiles := []profileListItem{
-		{Name: "dev*", Description: "development cluster"},
+		{Name: "dev", Description: "development cluster", Current: true},
 		{Name: "prod", Description: ""},
 	}
 

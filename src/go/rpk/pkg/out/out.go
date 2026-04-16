@@ -215,10 +215,16 @@ func args2strings(args []any) []string {
 	return sargs
 }
 
+// SectionTo prints header in uppercase, followed by a line of =, to w.
+func SectionTo(w io.Writer, header string) {
+	upper := norm(header)
+	fmt.Fprintln(w, upper)
+	fmt.Fprintln(w, strings.Repeat("=", len(upper)))
+}
+
 // Section prints header in uppercase, followed by a line of =.
 func Section(header string) {
-	fmt.Println(norm(header))
-	fmt.Println(strings.Repeat("=", len(header)))
+	SectionTo(os.Stdout, header)
 }
 
 // TabWriter writes tab delimited output.

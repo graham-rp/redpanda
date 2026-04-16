@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -87,7 +86,7 @@ Seek group G to the beginning of a topic it was not previously consuming:
     rpk group seek G --to start --topics foo --allow-new-topics
 `,
 		Args: cobra.ExactArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			f := p.Formatter
 			if h, ok := f.Help([]seekCommitResult{}); ok {
 				out.Exit(h)
@@ -121,7 +120,7 @@ Seek group G to the beginning of a topic it was not previously consuming:
 
 			group := args[0]
 
-			seek(fs, adm, group, to, toGroup, toFile, tset, allowNewTopics, f, os.Stdout)
+			seek(fs, adm, group, to, toGroup, toFile, tset, allowNewTopics, f, cmd.OutOrStdout())
 		},
 	}
 

@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
@@ -73,7 +72,7 @@ The --dry option will validate whether the requested configuration change is
 valid, but does not apply it.
 Use the flag '--no-confirm' to avoid the confirmation prompt.`,
 		Args: cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, topics []string) {
+		Run: func(cmd *cobra.Command, topics []string) {
 			f := p.Formatter
 			if h, ok := f.Help([]alterConfigResult{}); ok {
 				out.Exit(h)
@@ -200,7 +199,7 @@ Use the flag '--no-confirm' to avoid the confirmation prompt.`,
 				}
 				results = append(results, alterConfigResult{Topic: resource.ResourceName, Status: msg})
 			}
-			printAlterConfigResults(f, results, os.Stdout)
+			printAlterConfigResults(f, results, cmd.OutOrStdout())
 		},
 	}
 

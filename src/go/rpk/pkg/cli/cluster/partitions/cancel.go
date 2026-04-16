@@ -130,6 +130,10 @@ func printMovementsResult(f config.OutFormatter, results []movementCancelResult,
 		fmt.Fprintln(w, formatted)
 		return nil
 	}
+	if len(results) == 0 {
+		fmt.Fprintln(w, "There are no ongoing partition movements to cancel")
+		return nil
+	}
 	tw := out.NewTableTo(w, "Namespace", "Topic", "Partition", "Result")
 	defer tw.Flush()
 	for _, r := range results {

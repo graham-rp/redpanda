@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"go.uber.org/zap"
 
@@ -106,7 +105,7 @@ resource names:
 				printAllFilters = false
 				printDeletionsHeader = true
 			}
-			deleteReqResp(cmd.Context(), adm, srClient, printAllFilters, printDeletionsHeader, kBuilder, srACLs, filteredSRACLs, f)
+			deleteReqResp(cmd.Context(), adm, srClient, printAllFilters, printDeletionsHeader, kBuilder, srACLs, filteredSRACLs, f, cmd.OutOrStdout())
 		},
 	}
 	p.InstallFormatFlag(cmd)
@@ -154,6 +153,7 @@ func deleteReqResp(
 	srACLsFilter []rpsr.ACL,
 	filteredSRACLs []rpsr.ACL,
 	f config.OutFormatter,
+	w io.Writer,
 ) {
 	var (
 		kResults  []kadm.DeleteACLsResult
@@ -267,7 +267,7 @@ func deleteReqResp(
 	if len(output.Filters) > 0 {
 		printDeletionsHeader = true
 	}
-	printDeleteOutput(f, output, printDeletionsHeader, os.Stdout)
+	printDeleteOutput(f, output, printDeletionsHeader, w)
 }
 
 func printDeleteOutput(f config.OutFormatter, output aclDeleteOutput, printDeletionsHeader bool, w io.Writer) {
@@ -277,7 +277,7 @@ func printDeleteOutput(f config.OutFormatter, output aclDeleteOutput, printDelet
 		return
 	}
 	if len(output.Filters) > 0 {
-		out.Section("filters")
+		out.SectionTo(w, "filters")
 		tw := out.NewTableTo(w, headersWithError...)
 		for _, r := range output.Filters {
 			tw.PrintStructFields(r)
@@ -286,7 +286,7 @@ func printDeleteOutput(f config.OutFormatter, output aclDeleteOutput, printDelet
 		fmt.Fprintln(w)
 	}
 	if printDeletionsHeader {
-		out.Section("deletions")
+		out.SectionTo(w, "deletions")
 	}
 	tw := out.NewTableTo(w, headersWithError...)
 	for _, r := range output.Deletions {

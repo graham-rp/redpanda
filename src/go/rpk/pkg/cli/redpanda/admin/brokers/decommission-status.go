@@ -15,7 +15,6 @@ import (
 	"io"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/docker/go-units"
 	"github.com/redpanda-data/common-go/rpadmin"
@@ -101,14 +100,8 @@ func printDecommissionStatus(f config.OutFormatter, resp decommissionStatusRespo
 		return strconv.Itoa(size)
 	}
 
-	sectionHeader := func(header string) {
-		upper := strings.ToUpper(header)
-		fmt.Fprintln(w, upper)
-		fmt.Fprintln(w, strings.Repeat("=", len(upper)))
-	}
-
 	if len(resp.ReallocationFailures) > 0 {
-		sectionHeader("reallocation failure details")
+		out.SectionTo(w, "reallocation failure details")
 		tw := out.NewTableTo(w, "Partition", "Reason")
 		for _, rf := range resp.ReallocationFailures {
 			tw.Print(rf.Partition, rf.Reason)
@@ -116,14 +109,14 @@ func printDecommissionStatus(f config.OutFormatter, resp decommissionStatusRespo
 		tw.Flush()
 		fmt.Fprintln(w)
 	} else if len(resp.AllocationFailures) > 0 {
-		sectionHeader("allocation failures")
+		out.SectionTo(w, "allocation failures")
 		for _, af := range resp.AllocationFailures {
 			fmt.Fprintln(w, af)
 		}
 		fmt.Fprintln(w)
 	}
 
-	sectionHeader("decommission progress")
+	out.SectionTo(w, "decommission progress")
 	headers := []string{"Partition", "Moving-to", "Completion-%", "Partition-size"}
 	if detailed {
 		headers = append(headers, "Bytes-moved", "Bytes-remaining")

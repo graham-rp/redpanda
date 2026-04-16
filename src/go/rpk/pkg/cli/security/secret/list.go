@@ -83,7 +83,7 @@ func newListCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 					Scopes: scopes,
 				})
 			}
-			printSecretList(f, items, os.Stdout)
+			printSecretList(f, items, cmd.OutOrStdout())
 		},
 	}
 

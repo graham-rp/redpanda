@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
@@ -72,7 +71,7 @@ For example,
 `,
 
 		Args: cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, topics []string) {
+		Run: func(cmd *cobra.Command, topics []string) {
 			f := p.Formatter
 			if h, ok := f.Help([]topicDeleteResult{}); ok {
 				out.Exit(h)
@@ -107,7 +106,7 @@ For example,
 				}
 				results = append(results, topicDeleteResult{Topic: t.Topic, Status: msg})
 			}
-			printTopicDeleteResults(f, results, os.Stdout)
+			printTopicDeleteResults(f, results, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVarP(&re, "regex", "r", false, "Parse topics as regex; delete any topic that matches any input topic expression")

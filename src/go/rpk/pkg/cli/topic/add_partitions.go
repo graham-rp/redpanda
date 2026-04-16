@@ -51,7 +51,7 @@ func newAddPartitionsCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short: "Add partitions to existing topics",
 		Args:  cobra.MinimumNArgs(1),
 		Long:  `Add partitions to existing topics.`,
-		Run: func(_ *cobra.Command, topics []string) {
+		Run: func(cmd *cobra.Command, topics []string) {
 			f := p.Formatter
 			if h, ok := f.Help([]addPartitionsResult{}); ok {
 				out.Exit(h)
@@ -106,7 +106,7 @@ func newAddPartitionsCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 				}
 				results = append(results, addPartitionsResult{Topic: resp.Topic, Status: msg})
 			}
-			printAddPartitionsResults(f, results, os.Stdout)
+			printAddPartitionsResults(f, results, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().IntVarP(&num, "num", "n", 0, "Number of partitions to add to each topic")

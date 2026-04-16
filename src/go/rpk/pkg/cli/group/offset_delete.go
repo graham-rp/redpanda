@@ -102,7 +102,7 @@ topic_a 1
 topic_b 0
 `,
 		Args: cobra.ExactArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			f := p.Formatter
 			if h, ok := f.Help([]offsetDeleteResult{}); ok {
 				out.Exit(h)
@@ -138,7 +138,7 @@ topic_b 0
 			out.MaybeDieErr(err)
 
 			results, ok := buildOffsetDeleteResults(responses)
-			printOffsetDeleteResults(f, results, os.Stdout)
+			printOffsetDeleteResults(f, results, cmd.OutOrStdout())
 			if !ok { // At least one row contained an error.
 				os.Exit(1)
 			}

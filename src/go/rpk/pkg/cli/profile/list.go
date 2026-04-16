@@ -23,16 +23,17 @@ import (
 type profileListItem struct {
 	Name        string `json:"name" yaml:"name"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Current     bool   `json:"current,omitempty" yaml:"current,omitempty"`
 }
 
 func buildProfileList(y *config.RpkYaml) []profileListItem {
 	items := make([]profileListItem, 0, len(y.Profiles))
 	for _, p := range y.Profiles {
-		name := p.Name
-		if name == y.CurrentProfile {
-			name += "*"
-		}
-		items = append(items, profileListItem{Name: name, Description: p.Description})
+		items = append(items, profileListItem{
+			Name:        p.Name,
+			Description: p.Description,
+			Current:     p.Name == y.CurrentProfile,
+		})
 	}
 	return items
 }
@@ -46,7 +47,11 @@ func printProfileList(f config.OutFormatter, items []profileListItem, w io.Write
 	tw := out.NewTableTo(w, "Name", "Description")
 	defer tw.Flush()
 	for _, item := range items {
-		tw.Print(item.Name, item.Description)
+		name := item.Name
+		if item.Current {
+			name += "*"
+		}
+		tw.Print(name, item.Description)
 	}
 }
 
