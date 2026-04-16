@@ -12,6 +12,9 @@ package topic
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
@@ -21,6 +24,24 @@ import (
 	"github.com/twmb/franz-go/pkg/kerr"
 	"go.uber.org/zap"
 )
+
+type topicDeleteResult struct {
+	Topic  string `json:"topic" yaml:"topic"`
+	Status string `json:"status" yaml:"status"`
+}
+
+func printTopicDeleteResults(f config.OutFormatter, results []topicDeleteResult, w io.Writer) {
+	if isText, _, t, err := f.Format(results); !isText {
+		out.MaybeDie(err, "unable to print in the requested format %q: %v", f.Kind, err)
+		fmt.Fprintln(w, t)
+		return
+	}
+	tw := out.NewTableTo(w, "TOPIC", "STATUS")
+	defer tw.Flush()
+	for _, r := range results {
+		tw.Print(r.Topic, r.Status)
+	}
+}
 
 func newDeleteCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	var re bool
@@ -52,6 +73,11 @@ For example,
 
 		Args: cobra.MinimumNArgs(1),
 		Run: func(_ *cobra.Command, topics []string) {
+			f := p.Formatter
+			if h, ok := f.Help([]topicDeleteResult{}); ok {
+				out.Exit(h)
+			}
+
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "rpk unable to load config: %v", err)
 
@@ -66,8 +92,8 @@ For example,
 
 			resps, err := adm.DeleteTopics(context.Background(), topics...)
 			out.MaybeDie(err, "unable to issue delete topics request: %v", err)
-			tw := out.NewTable("topic", "status")
-			defer tw.Flush()
+
+			results := make([]topicDeleteResult, 0, len(resps))
 			for _, t := range resps.Sorted() {
 				msg := "OK"
 				if t.Err != nil {
@@ -79,10 +105,12 @@ For example,
 						}
 					}
 				}
-				tw.Print(t.Topic, msg)
+				results = append(results, topicDeleteResult{Topic: t.Topic, Status: msg})
 			}
+			printTopicDeleteResults(f, results, os.Stdout)
 		},
 	}
 	cmd.Flags().BoolVarP(&re, "regex", "r", false, "Parse topics as regex; delete any topic that matches any input topic expression")
+	p.InstallFormatFlag(cmd)
 	return cmd
 }
