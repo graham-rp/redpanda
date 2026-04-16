@@ -208,6 +208,11 @@ kafka/foo/7  Missing partition size information, all replicas may be offline
 				if he.Response.StatusCode == 400 {
 					body, bodyErr := he.DecodeGenericErrorBody()
 					if bodyErr == nil {
+						if isText, _, t, err := f.Format(decommissionStatusResponse{Partitions: []decommissionPartition{}}); !isText {
+							out.MaybeDie(err, "unable to print in the requested format %q: %v", f.Kind, err)
+							fmt.Fprintln(cmd.OutOrStdout(), t)
+							return
+						}
 						out.Exit("%s", body.Message)
 					}
 				}
@@ -215,6 +220,11 @@ kafka/foo/7  Missing partition size information, all replicas may be offline
 			out.MaybeDie(err, "unable to request brokers: %v", err)
 
 			if dbs.Finished {
+				if isText, _, t, err := f.Format(buildDecommissionStatus(dbs, detailed)); !isText {
+					out.MaybeDie(err, "unable to print in the requested format %q: %v", f.Kind, err)
+					fmt.Fprintln(cmd.OutOrStdout(), t)
+					return
+				}
 				if dbs.ReplicasLeft == 0 {
 					out.Exit("Node %d is decommissioned successfully.", broker)
 				} else {

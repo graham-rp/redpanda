@@ -224,4 +224,11 @@ func TestPrintDecommissionStatus(t *testing.T) {
 		// For small values like 1000 bytes, it renders as "1.0 kB".
 		require.NotContains(t, output, " 1000 ")
 	})
+
+	t.Run("json empty partitions", func(t *testing.T) {
+		empty := decommissionStatusResponse{Partitions: []decommissionPartition{}}
+		var buf bytes.Buffer
+		printDecommissionStatus(jsonFormatter(), empty, false, false, &buf)
+		require.Equal(t, `{"partitions":[]}`+"\n", buf.String())
+	})
 }
