@@ -137,3 +137,9 @@ func TestPrintMoveStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestPrintMoveStatusEmpty(t *testing.T) {
+	b := &strings.Builder{}
+	printMoveStatus(config.OutFormatter{Kind: "json"}, []partitionMoveStatus{}, false, b)
+	require.Equal(t, "[]\n", b.String())
+}

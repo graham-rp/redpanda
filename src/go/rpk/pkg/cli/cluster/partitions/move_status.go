@@ -127,6 +127,11 @@ func newPartitionMovementsStatusCommand(fs afero.Fs, p *config.Params) *cobra.Co
 			out.MaybeDie(err, "unable to list partition movements: %v", err)
 
 			if len(response) == 0 {
+				if isText, _, s, err := f.Format([]partitionMoveStatus{}); !isText {
+					out.MaybeDie(err, "unable to print in the requested format %q: %v", f.Kind, err)
+					fmt.Fprintln(cmd.OutOrStdout(), s)
+					return
+				}
 				out.Exit("There are no ongoing partition movements.")
 			}
 
