@@ -23,12 +23,12 @@ import (
 func TestBuildMoveStatuses(t *testing.T) {
 	input := []rpadmin.ReconfigurationsResponse{
 		{
-			Ns:          "kafka",
-			Topic:       "foo",
-			PartitionID: 0,
-			PartitionSize: 1000,
-			BytesMoved:  500,
-			BytesLeft:   500,
+			Ns:               "kafka",
+			Topic:            "foo",
+			PartitionID:      0,
+			PartitionSize:    1000,
+			BytesMoved:       500,
+			BytesLeft:        500,
 			PreviousReplicas: []rpadmin.Replica{
 				{NodeID: 1, Core: 0},
 				{NodeID: 2, Core: 0},
@@ -39,12 +39,12 @@ func TestBuildMoveStatuses(t *testing.T) {
 			},
 		},
 		{
-			Ns:          "kafka",
-			Topic:       "bar",
-			PartitionID: 1,
-			PartitionSize: 0, // zero partition size → completion stays 0
-			BytesMoved:  0,
-			BytesLeft:   200,
+			Ns:               "kafka",
+			Topic:            "bar",
+			PartitionID:      1,
+			PartitionSize:    0, // zero partition size → completion stays 0
+			BytesMoved:       0,
+			BytesLeft:        200,
 			PreviousReplicas: []rpadmin.Replica{{NodeID: 2, Core: 0}},
 			NewReplicas:      []rpadmin.Replica{{NodeID: 4, Core: 1}},
 		},
