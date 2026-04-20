@@ -32,6 +32,7 @@ go_test(
     embed = [":secret"],
     deps = [
         "//src/go/rpk/pkg/config",
+        "//src/go/rpk/pkg/out",
         "@com_github_stretchr_testify//require",
     ],
 )
